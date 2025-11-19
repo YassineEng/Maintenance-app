@@ -9,16 +9,15 @@ interface ScriptConfigModalProps {
     onSave: (config: any) => void;
     initialData: any;
     nodeId: string;
+    onRunScript: (nodeId: string, code: string) => Promise<void>;
 }
 
-export default function ScriptConfigModal({ isOpen, onClose, onSave, initialData, nodeId }: ScriptConfigModalProps) {
+export default function ScriptConfigModal({ isOpen, onClose, onSave, initialData, nodeId, onRunScript }: ScriptConfigModalProps) {
     const [label, setLabel] = useState(initialData?.label || '');
     const [code, setCode] = useState(initialData?.code || '');
     const [language, setLanguage] = useState(initialData?.language || 'python');
     const [packages, setPackages] = useState(initialData?.packages || '');
     const [isInstalling, setIsInstalling] = useState(false);
-    const [isRunning, setIsRunning] = useState(false);
-    const [output, setOutput] = useState('');
 
     if (!isOpen) return null;
 
@@ -30,14 +29,13 @@ export default function ScriptConfigModal({ isOpen, onClose, onSave, initialData
     const handleInstallPackages = async () => {
         if (!packages.trim() || !nodeId) return;
         setIsInstalling(true);
-        setOutput('Installing packages...');
         try {
             const pkgList = packages.split(',').map((p: string) => p.trim()).filter((p: string) => p);
             await scriptService.installPackages(nodeId, pkgList);
-            setOutput(prev => prev + '\nPackages installed successfully.');
+            alert('Packages installed successfully.');
         } catch (error: any) {
             console.error('Failed to install packages', error);
-            setOutput(prev => prev + `\nError installing packages: ${error.message}`);
+            alert(`Error installing packages: ${error.message}`);
         } finally {
             setIsInstalling(false);
         }
@@ -45,21 +43,7 @@ export default function ScriptConfigModal({ isOpen, onClose, onSave, initialData
 
     const handleRunScript = async () => {
         if (!code.trim() || !nodeId) return;
-        setIsRunning(true);
-        setOutput('Running script...');
-        try {
-            const result = await scriptService.runScript(nodeId, code);
-            let output = result.output || 'Script executed successfully (no output).';
-            if (output.length > 10000) {
-                output = output.substring(0, 10000) + '\n\n... (output truncated)';
-            }
-            setOutput(output);
-        } catch (error: any) {
-            console.error('Failed to run script', error);
-            setOutput(`Error running script: ${error.message}`);
-        } finally {
-            setIsRunning(false);
-        }
+        await onRunScript(nodeId, code);
     };
 
     return (
@@ -67,7 +51,7 @@ export default function ScriptConfigModal({ isOpen, onClose, onSave, initialData
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
             onKeyDown={(e) => e.stopPropagation()}
         >
-            <div className="bg-white rounded-lg shadow-xl w-[900px] h-[800px] flex flex-col">
+            <div className="bg-white rounded-lg shadow-xl w-[900px] h-[600px] flex flex-col">
                 <div className="flex justify-between items-center p-4 border-b border-gray-200">
                     <h2 className="text-xl font-bold text-gray-800">Configure Code Node</h2>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
@@ -130,11 +114,11 @@ export default function ScriptConfigModal({ isOpen, onClose, onSave, initialData
                             <button
                                 onClick={handleRunScript}
                                 className="text-green-600 hover:text-green-700 flex items-center gap-1 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled={!nodeId || isRunning}
+                                disabled={!nodeId}
                                 title={!nodeId ? "Save the node first to run code" : "Run code"}
                             >
-                                {isRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                                {isRunning ? 'Running...' : 'Run Code'}
+                                <Play size={14} />
+                                Run Code
                             </button>
                         </div>
                         <Editor
@@ -150,12 +134,6 @@ export default function ScriptConfigModal({ isOpen, onClose, onSave, initialData
                             }}
                         />
                     </div>
-
-                    {output && (
-                        <div className="bg-gray-900 text-gray-100 p-4 rounded-md font-mono text-sm h-32 overflow-y-auto whitespace-pre-wrap">
-                            {output}
-                        </div>
-                    )}
                 </div>
 
                 <div className="p-4 border-t border-gray-200 flex gap-2 justify-end bg-gray-50">

@@ -1,10 +1,32 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Settings, Plus } from 'lucide-react';
+import { NodeActionsToolbar } from './NodeActionsToolbar';
 
-const EquipmentNode = ({ data }: { data: any }) => {
+const EquipmentNode = ({ data, id }: { data: any, id: string }) => {
+    const [isHovered, setIsHovered] = useState(false);
+
+    const handleDelete = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (data.onDelete) data.onDelete(id);
+    };
+
+    const handleDuplicate = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (data.onDuplicate) data.onDuplicate(id, data);
+    };
+
     return (
-        <div className="relative bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow min-w-[180px]">
+        <div
+            className="relative bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow min-w-[180px]"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            <NodeActionsToolbar
+                isVisible={isHovered}
+                onDelete={handleDelete}
+                onDuplicate={handleDuplicate}
+            />
             {/* Connection Handles */}
             <Handle
                 type="target"

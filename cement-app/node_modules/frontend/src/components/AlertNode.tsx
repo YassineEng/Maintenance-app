@@ -1,8 +1,21 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import { AlertTriangle, Plus } from 'lucide-react';
+import { NodeActionsToolbar } from './NodeActionsToolbar';
 
-const AlertNode = ({ data }: { data: any }) => {
+const AlertNode = ({ data, id }: { data: any, id: string }) => {
+    const [isHovered, setIsHovered] = useState(false);
+
+    const handleDelete = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (data.onDelete) data.onDelete(id);
+    };
+
+    const handleDuplicate = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (data.onDuplicate) data.onDuplicate(id, data);
+    };
+
     const severityConfig = {
         Low: { bg: 'bg-yellow-50', text: 'text-yellow-700', badge: 'bg-yellow-100 text-yellow-700' },
         Medium: { bg: 'bg-orange-50', text: 'text-orange-700', badge: 'bg-orange-100 text-orange-700' },
@@ -13,7 +26,16 @@ const AlertNode = ({ data }: { data: any }) => {
     const config = severityConfig[data.severity as keyof typeof severityConfig] || severityConfig.Medium;
 
     return (
-        <div className="relative bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow min-w-[180px]">
+        <div
+            className="relative bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow min-w-[180px]"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            <NodeActionsToolbar
+                isVisible={isHovered}
+                onDelete={handleDelete}
+                onDuplicate={handleDuplicate}
+            />
             {/* Connection Handles */}
             <Handle
                 type="target"

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings, Bot, Database, AlertTriangle, Key, ChevronDown, ChevronRight } from 'lucide-react';
+import { Settings, Bot, Database, AlertTriangle, Key, ChevronDown, ChevronRight, Eye } from 'lucide-react';
 
 const nodeTypes = [
     { type: 'agent', label: 'AI Agent', icon: Bot, iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
@@ -7,6 +7,7 @@ const nodeTypes = [
     { type: 'alert', label: 'Alert', icon: AlertTriangle, iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
     { type: 'script', label: 'Code', icon: Settings, iconBg: 'bg-orange-50', iconColor: 'text-orange-600' },
     { type: 'env', label: 'Environment', icon: Key, iconBg: 'bg-green-50', iconColor: 'text-green-600' },
+    { type: 'display', label: 'Display', icon: Eye, iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
 ];
 
 const equipmentCategories = {

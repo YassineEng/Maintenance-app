@@ -16,6 +16,7 @@ import SensorNode from './SensorNode';
 import AlertNode from './AlertNode';
 import ScriptNode from './ScriptNode';
 import EnvNode from './EnvNode';
+import DisplayNode from './DisplayNode';
 import NodePalette from './NodePalette';
 import WorkflowToolbar from './WorkflowToolbar';
 import EquipmentConfigModal from './EquipmentConfigModal';
@@ -24,6 +25,7 @@ import SensorConfigModal from './SensorConfigModal';
 import AlertConfigModal from './AlertConfigModal';
 import ScriptConfigModal from './ScriptConfigModal';
 import EnvConfigModal from './EnvConfigModal';
+import DisplayConfigModal from './DisplayConfigModal';
 import { scriptService } from '../services/script.service';
 
 const nodeTypes = {
@@ -33,16 +35,13 @@ const nodeTypes = {
     alert: AlertNode,
     script: ScriptNode,
     env: EnvNode,
+    display: DisplayNode,
 };
 
-const initialNodes = [
-    { id: '1', type: 'equipment', position: { x: 100, y: 100 }, data: { label: 'Kiln Motor', equipmentId: '10002345', status: 'Running' } },
-    { id: '2', type: 'agent', position: { x: 100, y: 300 }, data: { label: 'Predictive Agent', task: 'Monitor vibration > 5mm/s', persona: 'Anomaly Detector' } },
-];
+const initialNodes: any[] = [];
+const initialEdges: any[] = [];
 
-const initialEdges = [{ id: 'e1-2', source: '1', target: '2' }];
-
-let nodeId = 3;
+let nodeId = 1;
 
 export default function WorkflowEditor() {
     const [nodes, setNodes, onNodesChange] = useNodesState<any>(initialNodes);
@@ -54,6 +53,7 @@ export default function WorkflowEditor() {
     const [alertModalOpen, setAlertModalOpen] = useState(false);
     const [scriptModalOpen, setScriptModalOpen] = useState(false);
     const [envModalOpen, setEnvModalOpen] = useState(false);
+    const [displayModalOpen, setDisplayModalOpen] = useState(false);
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
@@ -87,6 +87,9 @@ export default function WorkflowEditor() {
             case 'env':
                 setEnvModalOpen(true);
                 break;
+            case 'display':
+                setDisplayModalOpen(true);
+                break;
         }
     }, []);
 
@@ -104,6 +107,123 @@ export default function WorkflowEditor() {
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
     }, []);
+
+    const handleRunScript = async (nodeId: string, code: string) => {
+        try {
+            const result = await scriptService.runScript(nodeId, code);
+            const connectedEdges = edges.filter((edge) => edge.source === nodeId);
+            const targetNodeIds = connectedEdges.map((edge) => edge.target);
+
+            setNodes((nds) =>
+                nds.map((node) => {
+                    if (targetNodeIds.includes(node.id) && node.type === 'display') {
+                        return {
+                            ...node,
+                            data: { ...node.data, output: result.output },
+                        };
+                    }
+                    return node;
+                })
+            );
+        } catch (error: any) {
+            console.error('Failed to run script', error);
+            const connectedEdges = edges.filter((edge) => edge.source === nodeId);
+            const targetNodeIds = connectedEdges.map((edge) => edge.target);
+            setNodes((nds) =>
+                nds.map((node) => {
+                    if (targetNodeIds.includes(node.id) && node.type === 'display') {
+                        return {
+                            ...node,
+                            data: { ...node.data, output: `Error: ${error.message}` },
+                        };
+                    }
+                    return node;
+                })
+            );
+        }
+    };
+
+    const handleNodeDelete = useCallback((nodeId: string) => {
+        setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+        setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+        scriptService.deleteEnv(nodeId).catch(err => console.error("Failed to delete env", err));
+    }, [setNodes, setEdges]);
+
+    const handleNodeDuplicate = useCallback((nodeId: string, data: any) => {
+        const newNodeId = `${parseInt(nodeId) + 1000}`; // Simple ID generation
+
+        setNodes((nds) => {
+            const originalNode = nds.find((n) => n.id === nodeId);
+            if (!originalNode) return nds;
+
+            const newNode = {
+                id: newNodeId,
+                type: originalNode.type,
+                position: { x: originalNode.position.x + 50, y: originalNode.position.y + 50 },
+                data: {
+                    ...data,
+                    label: `${data.label} (Copy)`,
+                    onRun: handleRunScript,
+                    onDelete: handleNodeDelete,
+                    onDuplicate: handleNodeDuplicate
+                },
+            };
+
+            // Create env for duplicate if it's a script node
+            if (originalNode.type === 'script') {
+                scriptService.createEnv(newNodeId).catch(console.error);
+            }
+
+            return nds.concat(newNode);
+        });
+    }, [setNodes]);
+
+    const getDefaultNodeData = (type: string, equipmentType?: string) => {
+        const baseData = {
+            onDelete: handleNodeDelete,
+            onDuplicate: handleNodeDuplicate
+        };
+
+        switch (type) {
+            case 'equipment':
+                return {
+                    ...baseData,
+                    label: equipmentType || 'New Equipment',
+                    equipmentType: equipmentType || 'Rotary Kiln',
+                    equipmentId: '',
+                    status: 'Running'
+                };
+            case 'agent':
+                return {
+                    ...baseData,
+                    label: 'New Agent',
+                    model: 'gpt-4-turbo',
+                    task: '',
+                    persona: 'Maintenance Expert',
+                    temperature: 0.7,
+                    maxTokens: 2000,
+                    topP: 1.0
+                };
+            case 'sensor':
+                return { ...baseData, label: 'New Sensor', sensorId: '', type: 'Temperature' };
+            case 'alert':
+                return { ...baseData, label: 'New Alert', condition: '', severity: 'Medium' };
+            case 'script':
+                return {
+                    ...baseData,
+                    label: 'New Script',
+                    code: '',
+                    language: 'JavaScript',
+                    onRun: handleRunScript,
+                };
+            case 'env':
+                return { ...baseData, label: '.env', openaiKey: '', anthropicKey: '', customKeys: [] };
+            case 'display':
+                return { ...baseData, label: 'Display', output: '' };
+            default:
+                return { ...baseData, label: 'New Node' };
+        }
+    };
 
     const onDrop = useCallback(
         async (event: React.DragEvent) => {
@@ -132,7 +252,6 @@ export default function WorkflowEditor() {
                 try {
                     await scriptService.createEnv(newNode.id);
                     console.log(`Environment created for node ${newNode.id}`);
-                    alert(`Virtual Environment created successfully for node ${newNode.id}`);
                 } catch (error) {
                     console.error(`Failed to create environment for node ${newNode.id}`, error);
                 }
@@ -156,38 +275,6 @@ export default function WorkflowEditor() {
         },
         []
     );
-
-    const getDefaultNodeData = (type: string, equipmentType?: string) => {
-        switch (type) {
-            case 'equipment':
-                return {
-                    label: equipmentType || 'New Equipment',
-                    equipmentType: equipmentType || 'Rotary Kiln',
-                    equipmentId: '',
-                    status: 'Running'
-                };
-            case 'agent':
-                return {
-                    label: 'New Agent',
-                    model: 'gpt-4-turbo',
-                    task: '',
-                    persona: 'Maintenance Expert',
-                    temperature: 0.7,
-                    maxTokens: 2000,
-                    topP: 1.0
-                };
-            case 'sensor':
-                return { label: 'New Sensor', sensorId: '', type: 'Temperature' };
-            case 'alert':
-                return { label: 'New Alert', condition: '', severity: 'Medium' };
-            case 'script':
-                return { label: 'New Script', code: '', language: 'JavaScript' };
-            case 'env':
-                return { label: '.env', openaiKey: '', anthropicKey: '', customKeys: [] };
-            default:
-                return { label: 'New Node' };
-        }
-    };
 
     const handleSave = () => {
         console.log('Saving workflow...', { workflowName, nodes, edges });
@@ -270,12 +357,19 @@ export default function WorkflowEditor() {
                 onSave={handleConfigSave}
                 initialData={selectedNode?.data}
                 nodeId={selectedNode?.id}
+                onRunScript={handleRunScript}
             />
 
             <EnvConfigModal
                 isOpen={envModalOpen}
                 onClose={() => setEnvModalOpen(false)}
                 onSave={handleConfigSave}
+                initialData={selectedNode?.data}
+            />
+
+            <DisplayConfigModal
+                isOpen={displayModalOpen}
+                onClose={() => setDisplayModalOpen(false)}
                 initialData={selectedNode?.data}
             />
         </div>
