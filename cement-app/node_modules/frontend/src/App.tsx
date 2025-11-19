@@ -1,4 +1,3 @@
-import React from 'react';
 import { ReactFlowProvider } from 'reactflow';
 import WorkflowEditor from './components/WorkflowEditor';
 import 'reactflow/dist/style.css';

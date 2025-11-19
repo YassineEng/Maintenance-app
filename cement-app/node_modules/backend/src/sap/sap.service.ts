@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { executeHttpRequest, HttpMethod } from '@sap-cloud-sdk/http-client';
+import { executeHttpRequest } from '@sap-cloud-sdk/http-client';
 
 @Injectable()
 export class SapService {
@@ -16,8 +16,8 @@ export class SapService {
     async getEquipmentList() {
         try {
             this.logger.log('Fetching equipment list from SAP...');
-            const response = await executeHttpRequest(this.destination, {
-                method: HttpMethod.GET,
+            const response = await executeHttpRequest(this.destination as any, {
+                method: 'get',
                 url: '/sap/opu/odata/sap/API_EQUIPMENT/Equipment',
                 params: {
                     '$top': 100,
@@ -34,8 +34,8 @@ export class SapService {
     async getWorkOrders(equipmentId: string) {
         try {
             this.logger.log(`Fetching work orders for equipment ${equipmentId}...`);
-            const response = await executeHttpRequest(this.destination, {
-                method: HttpMethod.GET,
+            const response = await executeHttpRequest(this.destination as any, {
+                method: 'get',
                 url: '/sap/opu/odata/sap/API_MAINTENANCEORDER/MaintenanceOrder',
                 params: {
                     '$filter': `Equipment eq '${equipmentId}'`,
@@ -53,8 +53,8 @@ export class SapService {
     async createWorkOrder(orderData: any) {
         try {
             this.logger.log('Creating maintenance order in SAP...');
-            const response = await executeHttpRequest(this.destination, {
-                method: HttpMethod.POST,
+            const response = await executeHttpRequest(this.destination as any, {
+                method: 'post',
                 url: '/sap/opu/odata/sap/API_MAINTENANCEORDER/MaintenanceOrder',
                 data: orderData,
                 headers: {

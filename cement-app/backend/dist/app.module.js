@@ -8,12 +8,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
-const typeorm_1 = require("@nestjs/typeorm");
 const config_1 = require("@nestjs/config");
-const equipment_entity_1 = require("./entities/equipment.entity");
-const work_order_entity_1 = require("./entities/work-order.entity");
-const workflow_entity_1 = require("./entities/workflow.entity");
 const sap_module_1 = require("./sap/sap.module");
+const script_module_1 = require("./script/script.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -21,17 +18,8 @@ exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_1.ConfigModule.forRoot(),
-            typeorm_1.TypeOrmModule.forRoot({
-                type: 'postgres',
-                host: process.env.DB_HOST || 'localhost',
-                port: 5432,
-                username: process.env.DB_USER || 'postgres',
-                password: process.env.DB_PASSWORD || 'postgres',
-                database: process.env.DB_NAME || 'cement_app',
-                entities: [equipment_entity_1.Equipment, work_order_entity_1.WorkOrder, workflow_entity_1.Workflow],
-                synchronize: true,
-            }),
             sap_module_1.SapModule,
+            script_module_1.ScriptModule,
         ],
         controllers: [],
         providers: [],

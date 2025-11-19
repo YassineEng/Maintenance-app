@@ -24,7 +24,7 @@ let SapService = SapService_1 = class SapService {
         try {
             this.logger.log('Fetching equipment list from SAP...');
             const response = await (0, http_client_1.executeHttpRequest)(this.destination, {
-                method: http_client_1.HttpMethod.GET,
+                method: 'get',
                 url: '/sap/opu/odata/sap/API_EQUIPMENT/Equipment',
                 params: {
                     '$top': 100,
@@ -42,7 +42,7 @@ let SapService = SapService_1 = class SapService {
         try {
             this.logger.log(`Fetching work orders for equipment ${equipmentId}...`);
             const response = await (0, http_client_1.executeHttpRequest)(this.destination, {
-                method: http_client_1.HttpMethod.GET,
+                method: 'get',
                 url: '/sap/opu/odata/sap/API_MAINTENANCEORDER/MaintenanceOrder',
                 params: {
                     '$filter': `Equipment eq '${equipmentId}'`,
@@ -61,7 +61,7 @@ let SapService = SapService_1 = class SapService {
         try {
             this.logger.log('Creating maintenance order in SAP...');
             const response = await (0, http_client_1.executeHttpRequest)(this.destination, {
-                method: http_client_1.HttpMethod.POST,
+                method: 'post',
                 url: '/sap/opu/odata/sap/API_MAINTENANCEORDER/MaintenanceOrder',
                 data: orderData,
                 headers: {

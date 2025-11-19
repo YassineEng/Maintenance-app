@@ -24,6 +24,7 @@ import SensorConfigModal from './SensorConfigModal';
 import AlertConfigModal from './AlertConfigModal';
 import ScriptConfigModal from './ScriptConfigModal';
 import EnvConfigModal from './EnvConfigModal';
+import { scriptService } from '../services/script.service';
 
 const nodeTypes = {
     equipment: EquipmentNode,
@@ -44,7 +45,7 @@ const initialEdges = [{ id: 'e1-2', source: '1', target: '2' }];
 let nodeId = 3;
 
 export default function WorkflowEditor() {
-    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+    const [nodes, setNodes, onNodesChange] = useNodesState<any>(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
     const [selectedNode, setSelectedNode] = useState<any>(null);
     const [equipmentModalOpen, setEquipmentModalOpen] = useState(false);
@@ -65,7 +66,7 @@ export default function WorkflowEditor() {
         [setEdges],
     );
 
-    const onNodeDoubleClick: NodeMouseHandler = useCallback((event, node) => {
+    const onNodeDoubleClick: NodeMouseHandler = useCallback((_event, node) => {
         setSelectedNode(node);
         switch (node.type) {
             case 'equipment':
@@ -105,7 +106,7 @@ export default function WorkflowEditor() {
     }, []);
 
     const onDrop = useCallback(
-        (event: React.DragEvent) => {
+        async (event: React.DragEvent) => {
             event.preventDefault();
 
             const type = event.dataTransfer.getData('application/reactflow');
@@ -125,8 +126,35 @@ export default function WorkflowEditor() {
             };
 
             setNodes((nds) => nds.concat(newNode));
+
+            // Create environment for script nodes
+            if (type === 'script') {
+                try {
+                    await scriptService.createEnv(newNode.id);
+                    console.log(`Environment created for node ${newNode.id}`);
+                    alert(`Virtual Environment created successfully for node ${newNode.id}`);
+                } catch (error) {
+                    console.error(`Failed to create environment for node ${newNode.id}`, error);
+                }
+            }
         },
         [reactFlowInstance, setNodes]
+    );
+
+    const onNodesDelete = useCallback(
+        async (deletedNodes: any[]) => {
+            for (const node of deletedNodes) {
+                if (node.type === 'script') {
+                    try {
+                        await scriptService.deleteEnv(node.id);
+                        console.log(`Environment deleted for node ${node.id}`);
+                    } catch (error) {
+                        console.error(`Failed to delete environment for node ${node.id}`, error);
+                    }
+                }
+            }
+        },
+        []
     );
 
     const getDefaultNodeData = (type: string, equipmentType?: string) => {
@@ -197,6 +225,7 @@ export default function WorkflowEditor() {
                         onInit={setReactFlowInstance}
                         onDrop={onDrop}
                         onDragOver={onDragOver}
+                        onNodesDelete={onNodesDelete}
                         nodeTypes={nodeTypes}
                         fitView
                     >
@@ -240,6 +269,7 @@ export default function WorkflowEditor() {
                 onClose={() => setScriptModalOpen(false)}
                 onSave={handleConfigSave}
                 initialData={selectedNode?.data}
+                nodeId={selectedNode?.id}
             />
 
             <EnvConfigModal
