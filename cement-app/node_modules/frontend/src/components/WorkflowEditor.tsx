@@ -312,7 +312,18 @@ export default function WorkflowEditor() {
     }, [setNodes, setEdges]);
 
     const handleNodeDelete = useCallback((nodeId: string) => {
-        setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+        // Get the node type before deleting
+        setNodes((nds) => {
+            const nodeToDelete = nds.find(n => n.id === nodeId);
+
+            // Delete venv if it's a script node
+            if (nodeToDelete?.type === 'script') {
+                scriptService.deleteEnv(nodeId).catch(console.error);
+            }
+
+            return nds.filter((node) => node.id !== nodeId);
+        });
+
         setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
     }, [setNodes, setEdges]);
 
@@ -449,6 +460,11 @@ export default function WorkflowEditor() {
             };
 
             setNodes((nds) => nds.concat(newNode));
+
+            // Create venv for script nodes
+            if (type === 'script') {
+                scriptService.createEnv(newNode.id).catch(console.error);
+            }
         },
         [reactFlowInstance, setNodes, getDefaultNodeData],
     );
