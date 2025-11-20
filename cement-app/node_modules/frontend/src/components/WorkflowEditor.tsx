@@ -32,73 +32,7 @@ import EnvConfigModal from './EnvConfigModal';
 import DisplayConfigModal from './DisplayConfigModal';
 import { scriptService } from '../services/script.service';
 import { fileService } from '../services/file.service';
-import { geminiService } from '../services/gemini.service';
-import { initializeNodes } from '../core/initNodes';
-import GenericNodeModal from './GenericNodeModal';
-import { nodeRegistry } from '../core/NodeRegistry';
-import { NodeExecutor } from '../core/NodeExecutor';
 
-// Initialize nodes registry
-initializeNodes();
-
-const nodeTypes = {
-    equipment: EquipmentNode,
-    agent: AgentNode,
-    sensor: SensorNode,
-    alert: AlertNode,
-    script: ScriptNode,
-    env: EnvNode,
-    display: DisplayNode,
-    file: FileNode,
-};
-
-const initialNodes: any[] = [];
-const initialEdges: any[] = [];
-
-let nodeId = 1;
-
-export default function WorkflowEditor() {
-    const [nodes, setNodes, onNodesChange] = useNodesState<any>(initialNodes);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-    const [selectedNode, setSelectedNode] = useState<any>(null);
-    const [equipmentModalOpen, setEquipmentModalOpen] = useState(false);
-    const [agentModalOpen, setAgentModalOpen] = useState(false);
-    ```
-import React, { useState, useCallback, useRef } from 'react';
-import ReactFlow, {
-    addEdge,
-    Background,
-    Controls,
-    MiniMap,
-    useNodesState,
-    useEdgesState,
-    Connection,
-    Edge,
-    NodeMouseHandler,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
-
-import EquipmentNode from './EquipmentNode';
-import AgentNode from './AgentNode';
-import SensorNode from './SensorNode';
-import AlertNode from './AlertNode';
-import ScriptNode from './ScriptNode';
-import EnvNode from './EnvNode';
-import DisplayNode from './DisplayNode';
-import FileNode from './FileNode';
-import NodePalette from './NodePalette';
-import WorkflowToolbar from './WorkflowToolbar';
-import EquipmentConfigModal from './EquipmentConfigModal';
-import AgentConfigModal from './AgentConfigModal';
-import SensorConfigModal from './SensorConfigModal';
-import AlertConfigModal from './AlertConfigModal';
-import ScriptConfigModal from './ScriptConfigModal';
-import FileContentModal from './FileContentModal';
-import EnvConfigModal from './EnvConfigModal';
-import DisplayConfigModal from './DisplayConfigModal';
-import { scriptService } from '../services/script.service';
-import { fileService } from '../services/file.service';
-import { geminiService } from '../services/gemini.service';
 import { initializeNodes } from '../core/initNodes';
 import GenericNodeModal from './GenericNodeModal';
 import { nodeRegistry } from '../core/NodeRegistry';
@@ -136,7 +70,7 @@ export default function WorkflowEditor() {
     const [displayModalOpen, setDisplayModalOpen] = useState(false);
     const [isFileModalOpen, setIsFileModalOpen] = useState(false);
     const [selectedFileNode, setSelectedFileNode] = useState<{ path: string; name: string } | null>(null);
-    
+
     // Generic Node Modal State (New Architecture)
     const [genericModalOpen, setGenericModalOpen] = useState(false);
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -152,10 +86,15 @@ export default function WorkflowEditor() {
     );
 
     const onNodeDoubleClick: NodeMouseHandler = useCallback((_event, node) => {
+        console.log('Double clicked node:', node);
+        console.log('Node type:', node.type);
+        console.log('Registry has node:', nodeRegistry.hasNode(node.type));
+
         setSelectedNode(node);
 
         // Check if node is in registry (New Architecture)
-        if (nodeRegistry.hasNode(node.type)) {
+        if (node.type && nodeRegistry.hasNode(node.type)) {
+            console.log('Opening GenericNodeModal for:', node.type);
             setGenericModalOpen(true);
             return;
         }
@@ -257,7 +196,7 @@ export default function WorkflowEditor() {
                     if (targetNodeIds.includes(node.id) && node.type === 'display') {
                         return {
                             ...node,
-                            data: { ...node.data, output: `Error: ${ error.message } ` },
+                            data: { ...node.data, output: 'Error: ' + error.message },
                         };
                     }
                     return node;
@@ -267,7 +206,7 @@ export default function WorkflowEditor() {
     };
 
     const handleUploadComplete = useCallback(async (nodeId: string, fileInfo: any) => {
-        console.log(`Upload complete for node ${ nodeId }`, fileInfo);
+        console.log(`Upload complete for node ${nodeId}`, fileInfo);
 
         // Update the node's data
         setNodes(nds => nds.map(node => {
@@ -312,108 +251,13 @@ export default function WorkflowEditor() {
         }
     }, [setNodes]);
 
-    const handleRunAgent = useCallback(async (nodeId: string) => {
-        try {
-            let agentNode: any = null;
-            let envNode: any = null;
-            let currentEdges: any[] = [];
 
-            // Get current state
-            setNodes(nds => {
-                agentNode = nds.find(n => n.id === nodeId);
-                return nds;
-            });
-
-            setEdges(eds => {
-                currentEdges = eds;
-                return eds;
-            });
-
-            if (!agentNode) {
-                console.error('Agent node not found');
-                return;
-            }
-
-            const incomingEdges = currentEdges.filter(edge => edge.target === nodeId);
-
-            setNodes(nds => {
-                const envNodeId = incomingEdges.find(edge => {
-                    const sourceNode = nds.find(n => n.id === edge.source);
-                    return sourceNode?.type === 'env';
-                })?.source;
-
-                if (envNodeId) {
-                    envNode = nds.find(n => n.id === envNodeId);
-                }
-                return nds;
-            });
-
-            if (!envNode) {
-                throw new Error('No ENV node connected. Please connect an ENV node with API keys.');
-            }
-
-            const geminiKey = envNode.data.geminiKey;
-            if (!geminiKey) {
-                throw new Error('Gemini API key not found in ENV node. Please configure the ENV node with a Gemini API key.');
-            }
-
-            const { model, task } = agentNode.data;
-            if (!task) {
-                throw new Error('Agent task/prompt is empty. Please configure the agent with a task.');
-            }
-
-            const result = await geminiService.generateContent(geminiKey, model, task);
-
-            if (!result.success) {
-                throw new Error(result.error || 'Failed to generate content');
-            }
-
-            const outgoingEdges = currentEdges.filter(edge => edge.source === nodeId);
-            const targetNodeIds = outgoingEdges.map(edge => edge.target);
-
-            setNodes(nds => nds.map(node => {
-                if (targetNodeIds.includes(node.id) && node.type === 'display') {
-                    return {
-                        ...node,
-                        data: {
-                            ...node.data,
-                            output: result.text
-                        }
-                    };
-                }
-                return node;
-            }));
-
-        } catch (error: any) {
-            console.error('Failed to run agent:', error);
-
-            setEdges(eds => {
-                const outgoingEdges = eds.filter(edge => edge.source === nodeId);
-                const targetNodeIds = outgoingEdges.map(edge => edge.target);
-
-                setNodes(nds => nds.map(node => {
-                    if (targetNodeIds.includes(node.id) && node.type === 'display') {
-                        return {
-                            ...node,
-                            data: {
-                                ...node.data,
-                                output: `Error: ${ error.message } `
-                            }
-                        };
-                    }
-                    return node;
-                }));
-
-                return eds;
-            });
-        }
-    }, [setNodes, setEdges]);
 
     const handleRunNode = useCallback(async (nodeId: string) => {
         let currentNode: any;
         let currentNodes: any[] = [];
         let currentEdges: any[] = [];
-        
+
         // Get latest state
         setNodes(nds => {
             currentNodes = nds;
@@ -424,12 +268,12 @@ export default function WorkflowEditor() {
             currentEdges = eds;
             return eds;
         });
-        
+
         if (!currentNode) return;
 
         // Get input data from incoming edges
         const inputEdges = currentEdges.filter((edge) => edge.target === nodeId);
-        
+
         const inputData = inputEdges.map((edge) => {
             const sourceNode = currentNodes.find((n) => n.id === edge.source);
             // Support both new executionResult and legacy output
@@ -446,46 +290,46 @@ export default function WorkflowEditor() {
         }
 
         try {
-             // Execute
+            // Execute
             const result = await NodeExecutor.executeNode(currentNode.type, {
                 node: {
                     ...currentNode,
                     name: currentNode.data.label || currentNode.type,
                     parameters: currentNode.data.parameters || currentNode.data, // Fallback
                 },
-                workflow: { nodes: currentNodes, connections: {} }, // Mock workflow
+                workflow: { nodes: currentNodes, connections: {}, name: 'mock', active: true }, // Mock workflow
                 inputData,
                 credentials: {}, // Credentials handled by Env node in inputData
             });
 
             if (result.error) {
-                console.error(`Error executing node ${ nodeId }: `, result.error);
+                console.error(`Error executing node ${nodeId}: `, result.error);
                 // Update node with error
-                setNodes((nds) => nds.map(n => n.id === nodeId ? { 
-                    ...n, 
-                    data: { ...n.data, error: result.error?.message } 
+                setNodes((nds) => nds.map(n => n.id === nodeId ? {
+                    ...n,
+                    data: { ...n.data, error: result.error?.message }
                 } : n));
                 return;
             }
 
             // Update node with result
-            setNodes((nds) => nds.map(n => n.id === nodeId ? { 
-                ...n, 
-                data: { 
-                    ...n.data, 
+            setNodes((nds) => nds.map(n => n.id === nodeId ? {
+                ...n,
+                data: {
+                    ...n.data,
                     executionResult: result.data,
                     // Legacy compatibility for Display node
                     output: result.data[0]?.[0]?.json?.output || (typeof result.data[0]?.[0]?.json === 'string' ? result.data[0]?.[0]?.json : JSON.stringify(result.data[0]?.[0]?.json, null, 2)),
                     error: undefined // Clear error
-                } 
+                }
             } : n));
 
         } catch (e: any) {
             console.error('Execution failed:', e);
-             setNodes((nds) => nds.map(n => n.id === nodeId ? { 
-                    ...n, 
-                    data: { ...n.data, error: e.message } 
-                } : n));
+            setNodes((nds) => nds.map(n => n.id === nodeId ? {
+                ...n,
+                data: { ...n.data, error: e.message }
+            } : n));
         }
     }, [setNodes, setEdges]);
 
@@ -506,7 +350,7 @@ export default function WorkflowEditor() {
     }, [setNodes, setEdges]);
 
     const handleNodeDuplicate = useCallback((nodeId: string, data: any) => {
-        const newNodeId = `${ parseInt(nodeId) + 1000 } `; // Simple ID generation
+        const newNodeId = `${parseInt(nodeId) + 1000} `; // Simple ID generation
 
         setNodes((nds) => {
             const originalNode = nds.find((n) => n.id === nodeId);
@@ -518,7 +362,7 @@ export default function WorkflowEditor() {
                 position: { x: originalNode.position.x + 50, y: originalNode.position.y + 50 },
                 data: {
                     ...data,
-                    label: `${ data.label } (Copy)`,
+                    label: `${data.label} (Copy)`,
                     onRun: handleRunScript, // This should be handleRunNode for new architecture
                     onDelete: handleNodeDelete,
                     onDuplicate: handleNodeDuplicate,
@@ -545,7 +389,7 @@ export default function WorkflowEditor() {
     }, [setNodes, handleUploadComplete, handleNodeDelete, handleRunScript]);
 
     const getDefaultNodeData = (type: string) => {
-        const baseData = { 
+        const baseData = {
             label: type.charAt(0).toUpperCase() + type.slice(1),
             onDelete: handleNodeDelete,
             onDuplicate: handleNodeDuplicate,
@@ -630,7 +474,7 @@ export default function WorkflowEditor() {
 
             const reactFlowBounds = reactFlowWrapper.current!.getBoundingClientRect();
             const type = event.dataTransfer.getData('application/reactflow');
-            const equipmentType = event.dataTransfer.getData('application/reactflow/equipmentType');
+
 
             // check if the dropped element is valid
             if (typeof type === 'undefined' || !type) {
@@ -784,7 +628,7 @@ export default function WorkflowEditor() {
             <DisplayConfigModal
                 isOpen={displayModalOpen}
                 onClose={() => setDisplayModalOpen(false)}
-                onSave={handleConfigSave}
+
                 initialData={selectedNode?.data}
             />
 
@@ -797,4 +641,3 @@ export default function WorkflowEditor() {
         </div>
     );
 }
-```

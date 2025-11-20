@@ -30,5 +30,5 @@ export function initializeNodes() {
     ]);
 
     console.log('✅ All nodes registered successfully');
-    console.log('Registered nodes:', nodeRegistry.getAllNodeNames());
+    console.log('Registered nodes:', nodeRegistry.getAllNodes().map(n => n.description.name));
 }

@@ -31,8 +31,10 @@ export default function GenericNodeModal({
 
     // Load node description and initial data when modal opens
     useEffect(() => {
+        console.log('GenericNodeModal effect:', { isOpen, nodeType, initialData });
         if (isOpen && nodeType) {
             const description = nodeRegistry.getNodeDescription(nodeType);
+            console.log('Node description found:', description);
             if (description) {
                 setNodeDescription(description);
                 // Merge defaults with initial data
@@ -45,6 +47,8 @@ export default function GenericNodeModal({
                 const initialParams = initialData.parameters || initialData;
 
                 setConfig({ ...defaults, ...initialParams });
+            } else {
+                console.error('No description found for node type:', nodeType);
             }
         }
     }, [isOpen, nodeType, initialData]);
