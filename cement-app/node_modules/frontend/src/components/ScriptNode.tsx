@@ -3,14 +3,13 @@ import { Handle, Position } from 'reactflow';
 import { NodeActionsToolbar } from './NodeActionsToolbar';
 
 const ScriptNode = ({ data, id }: { data: any, id: string }) => {
-    const [isRunning, setIsRunning] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
 
     const handleRun = (e: React.MouseEvent) => {
         e.stopPropagation();
+        console.log(`Running script for node ${id}. Code length: ${data.code?.length || 0}`);
         if (data.onRun) {
-            setIsRunning(true);
-            data.onRun(id, data.code).finally(() => setIsRunning(false));
+            data.onRun(id, data.code);
         }
     };
 

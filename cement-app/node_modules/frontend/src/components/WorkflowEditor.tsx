@@ -108,10 +108,16 @@ export default function WorkflowEditor() {
         event.dataTransfer.dropEffect = 'move';
     }, []);
 
+    // Keep track of edges in a ref to avoid stale closures in node callbacks
+    const edgesRef = useRef(edges);
+    edgesRef.current = edges;
+
     const handleRunScript = async (nodeId: string, code: string) => {
         try {
             const result = await scriptService.runScript(nodeId, code);
-            const connectedEdges = edges.filter((edge) => edge.source === nodeId);
+            // Use ref to get latest edges
+            const currentEdges = edgesRef.current;
+            const connectedEdges = currentEdges.filter((edge) => edge.source === nodeId);
             const targetNodeIds = connectedEdges.map((edge) => edge.target);
 
             setNodes((nds) =>
@@ -127,7 +133,8 @@ export default function WorkflowEditor() {
             );
         } catch (error: any) {
             console.error('Failed to run script', error);
-            const connectedEdges = edges.filter((edge) => edge.source === nodeId);
+            const currentEdges = edgesRef.current;
+            const connectedEdges = currentEdges.filter((edge) => edge.source === nodeId);
             const targetNodeIds = connectedEdges.map((edge) => edge.target);
             setNodes((nds) =>
                 nds.map((node) => {
@@ -165,7 +172,16 @@ export default function WorkflowEditor() {
                     label: `${data.label} (Copy)`,
                     onRun: handleRunScript,
                     onDelete: handleNodeDelete,
-                    onDuplicate: handleNodeDuplicate
+                    onDuplicate: handleNodeDuplicate,
+                    onClear: (nodeId: string) => {
+                        setNodes((nds) =>
+                            nds.map((node) =>
+                                node.id === nodeId
+                                    ? { ...node, data: { ...node.data, output: '' } }
+                                    : node
+                            )
+                        );
+                    }
                 },
             };
 
@@ -219,7 +235,20 @@ export default function WorkflowEditor() {
             case 'env':
                 return { ...baseData, label: '.env', openaiKey: '', anthropicKey: '', customKeys: [] };
             case 'display':
-                return { ...baseData, label: 'Display', output: '' };
+                return {
+                    ...baseData,
+                    label: 'Display',
+                    output: '',
+                    onClear: (nodeId: string) => {
+                        setNodes((nds) =>
+                            nds.map((node) =>
+                                node.id === nodeId
+                                    ? { ...node, data: { ...node.data, output: '' } }
+                                    : node
+                            )
+                        );
+                    }
+                };
             default:
                 return { ...baseData, label: 'New Node' };
         }
@@ -228,9 +257,11 @@ export default function WorkflowEditor() {
     const onDrop = useCallback(
         async (event: React.DragEvent) => {
             event.preventDefault();
+            console.log('onDrop triggered!', event);
 
             const type = event.dataTransfer.getData('application/reactflow');
             const equipmentType = event.dataTransfer.getData('equipmentType');
+            console.log('Drop data:', { type, equipmentType });
             if (!type || !reactFlowInstance) return;
 
             const position = reactFlowInstance.screenToFlowPosition({
@@ -262,8 +293,10 @@ export default function WorkflowEditor() {
 
     const onNodesDelete = useCallback(
         async (deletedNodes: any[]) => {
+            console.log('onNodesDelete triggered', deletedNodes);
             for (const node of deletedNodes) {
                 if (node.type === 'script') {
+                    console.log(`Attempting to delete env for node ${node.id}`);
                     try {
                         await scriptService.deleteEnv(node.id);
                         console.log(`Environment deleted for node ${node.id}`);
