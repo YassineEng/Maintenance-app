@@ -6,6 +6,7 @@ import { WorkOrder } from './entities/work-order.entity';
 import { Workflow } from './entities/workflow.entity';
 import { SapModule } from './sap/sap.module';
 import { ScriptModule } from './script/script.module';
+import { FileModule } from './file/file.module';
 
 @Module({
     imports: [
@@ -22,6 +23,7 @@ import { ScriptModule } from './script/script.module';
         // }),
         SapModule,
         ScriptModule,
+        FileModule,
     ],
     controllers: [],
     providers: [],

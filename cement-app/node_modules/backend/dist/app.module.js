@@ -11,6 +11,7 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const sap_module_1 = require("./sap/sap.module");
 const script_module_1 = require("./script/script.module");
+const file_module_1 = require("./file/file.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -20,6 +21,7 @@ exports.AppModule = AppModule = __decorate([
             config_1.ConfigModule.forRoot(),
             sap_module_1.SapModule,
             script_module_1.ScriptModule,
+            file_module_1.FileModule,
         ],
         controllers: [],
         providers: [],

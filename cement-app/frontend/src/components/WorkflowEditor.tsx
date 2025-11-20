@@ -1,15 +1,17 @@
-import { useCallback, useState, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import ReactFlow, {
     addEdge,
-    MiniMap,
-    Controls,
     Background,
+    Controls,
+    MiniMap,
     useNodesState,
     useEdgesState,
     Connection,
     Edge,
     NodeMouseHandler,
 } from 'reactflow';
+import 'reactflow/dist/style.css';
+
 import EquipmentNode from './EquipmentNode';
 import AgentNode from './AgentNode';
 import SensorNode from './SensorNode';
@@ -17,6 +19,7 @@ import AlertNode from './AlertNode';
 import ScriptNode from './ScriptNode';
 import EnvNode from './EnvNode';
 import DisplayNode from './DisplayNode';
+import FileNode from './FileNode';
 import NodePalette from './NodePalette';
 import WorkflowToolbar from './WorkflowToolbar';
 import EquipmentConfigModal from './EquipmentConfigModal';
@@ -24,9 +27,11 @@ import AgentConfigModal from './AgentConfigModal';
 import SensorConfigModal from './SensorConfigModal';
 import AlertConfigModal from './AlertConfigModal';
 import ScriptConfigModal from './ScriptConfigModal';
+import FileContentModal from './FileContentModal';
 import EnvConfigModal from './EnvConfigModal';
 import DisplayConfigModal from './DisplayConfigModal';
 import { scriptService } from '../services/script.service';
+import { fileService } from '../services/file.service';
 
 const nodeTypes = {
     equipment: EquipmentNode,
@@ -36,6 +41,7 @@ const nodeTypes = {
     script: ScriptNode,
     env: EnvNode,
     display: DisplayNode,
+    file: FileNode,
 };
 
 const initialNodes: any[] = [];
@@ -54,6 +60,8 @@ export default function WorkflowEditor() {
     const [scriptModalOpen, setScriptModalOpen] = useState(false);
     const [envModalOpen, setEnvModalOpen] = useState(false);
     const [displayModalOpen, setDisplayModalOpen] = useState(false);
+    const [isFileModalOpen, setIsFileModalOpen] = useState(false);
+    const [selectedFileNode, setSelectedFileNode] = useState<{ path: string; name: string } | null>(null);
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
@@ -89,6 +97,15 @@ export default function WorkflowEditor() {
                 break;
             case 'display':
                 setDisplayModalOpen(true);
+                break;
+            case 'file':
+                if (node.data.fileInfo) {
+                    setSelectedFileNode({
+                        path: node.data.fileInfo.path,
+                        name: node.data.fileInfo.name
+                    });
+                    setIsFileModalOpen(true);
+                }
                 break;
         }
     }, []);
@@ -150,10 +167,55 @@ export default function WorkflowEditor() {
         }
     };
 
+    const handleUploadComplete = useCallback(async (nodeId: string, fileInfo: any) => {
+        console.log(`Upload complete for node ${nodeId}`, fileInfo);
+
+        // Update the node's data
+        setNodes(nds => nds.map(node => {
+            if (node.id === nodeId) {
+                return {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        fileInfo: fileInfo,
+                        label: fileInfo ? fileInfo.name : 'File Node'
+                    }
+                };
+            }
+            return node;
+        }));
+
+        // Propagate to connected Display Nodes
+        if (fileInfo) {
+            const currentEdges = edgesRef.current;
+            const connectedEdges = currentEdges.filter(edge => edge.source === nodeId);
+            const targetNodeIds = connectedEdges.map(edge => edge.target);
+
+            if (targetNodeIds.length > 0) {
+                try {
+                    const content = await fileService.getFileContent(fileInfo.path);
+                    setNodes(nds => nds.map(node => {
+                        if (targetNodeIds.includes(node.id) && node.type === 'display') {
+                            return {
+                                ...node,
+                                data: {
+                                    ...node.data,
+                                    output: content.slice(0, 2000) + (content.length > 2000 ? '\n... (content truncated)' : '')
+                                }
+                            };
+                        }
+                        return node;
+                    }));
+                } catch (error) {
+                    console.error('Failed to propagate file content:', error);
+                }
+            }
+        }
+    }, [setNodes]);
+
     const handleNodeDelete = useCallback((nodeId: string) => {
         setNodes((nds) => nds.filter((node) => node.id !== nodeId));
         setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
-        scriptService.deleteEnv(nodeId).catch(err => console.error("Failed to delete env", err));
     }, [setNodes, setEdges]);
 
     const handleNodeDuplicate = useCallback((nodeId: string, data: any) => {
@@ -181,7 +243,8 @@ export default function WorkflowEditor() {
                                     : node
                             )
                         );
-                    }
+                    },
+                    onUploadComplete: handleUploadComplete
                 },
             };
 
@@ -192,7 +255,7 @@ export default function WorkflowEditor() {
 
             return nds.concat(newNode);
         });
-    }, [setNodes]);
+    }, [setNodes, handleUploadComplete, handleNodeDelete, handleRunScript]);
 
     const getDefaultNodeData = (type: string, equipmentType?: string) => {
         const baseData = {
@@ -249,79 +312,81 @@ export default function WorkflowEditor() {
                         );
                     }
                 };
+            case 'file':
+                return {
+                    ...baseData,
+                    label: 'File Node',
+                    fileInfo: null,
+                    onUploadComplete: handleUploadComplete
+                };
             default:
                 return { ...baseData, label: 'New Node' };
         }
     };
 
     const onDrop = useCallback(
-        async (event: React.DragEvent) => {
+        (event: React.DragEvent) => {
             event.preventDefault();
-            console.log('onDrop triggered!', event);
 
+            const reactFlowBounds = reactFlowWrapper.current!.getBoundingClientRect();
             const type = event.dataTransfer.getData('application/reactflow');
-            const equipmentType = event.dataTransfer.getData('equipmentType');
-            console.log('Drop data:', { type, equipmentType });
-            if (!type || !reactFlowInstance) return;
+            const equipmentType = event.dataTransfer.getData('application/reactflow/equipmentType');
 
-            const position = reactFlowInstance.screenToFlowPosition({
-                x: event.clientX,
-                y: event.clientY,
+            // check if the dropped element is valid
+            if (typeof type === 'undefined' || !type) {
+                return;
+            }
+
+            const position = reactFlowInstance.project({
+                x: event.clientX - reactFlowBounds.left,
+                y: event.clientY - reactFlowBounds.top,
             });
 
             const newNode = {
-                id: `${nodeId++}`,
+                id: String(nodeId++),
                 type,
                 position,
                 data: getDefaultNodeData(type, equipmentType),
             };
 
             setNodes((nds) => nds.concat(newNode));
-
-            // Create environment for script nodes
-            if (type === 'script') {
-                try {
-                    await scriptService.createEnv(newNode.id);
-                    console.log(`Environment created for node ${newNode.id}`);
-                } catch (error) {
-                    console.error(`Failed to create environment for node ${newNode.id}`, error);
-                }
-            }
         },
-        [reactFlowInstance, setNodes]
+        [reactFlowInstance, setNodes, getDefaultNodeData],
     );
 
     const onNodesDelete = useCallback(
-        async (deletedNodes: any[]) => {
-            console.log('onNodesDelete triggered', deletedNodes);
-            for (const node of deletedNodes) {
+        (deletedNodes: any[]) => {
+            setEdges(
+                (eds) =>
+                    eds.filter(
+                        (edge) =>
+                            !deletedNodes.some((node) => node.id === edge.source || node.id === edge.target),
+                    ),
+            );
+            deletedNodes.forEach(node => {
                 if (node.type === 'script') {
-                    console.log(`Attempting to delete env for node ${node.id}`);
-                    try {
-                        await scriptService.deleteEnv(node.id);
-                        console.log(`Environment deleted for node ${node.id}`);
-                    } catch (error) {
-                        console.error(`Failed to delete environment for node ${node.id}`, error);
-                    }
+                    scriptService.deleteEnv(node.id).catch(console.error);
                 }
-            }
+            });
         },
-        []
+        [setEdges],
     );
 
     const handleSave = () => {
-        console.log('Saving workflow...', { workflowName, nodes, edges });
-        // Add your save logic here
+        if (reactFlowInstance) {
+            const flow = reactFlowInstance.toObject();
+            console.log('Workflow saved:', flow);
+            // Here you would typically send `flow` to your backend
+        }
     };
 
     const handleTest = () => {
-        console.log('Testing workflow...');
-        // Add your test logic here
+        console.log('Test workflow');
+        // Logic to test the workflow
     };
 
     return (
-        <div className="flex flex-col w-screen h-screen">
-            {/* Toolbar */}
+        <div className="flex flex-col h-screen">
             <WorkflowToolbar
                 workflowName={workflowName}
                 isActive={isActive}
@@ -404,6 +469,13 @@ export default function WorkflowEditor() {
                 isOpen={displayModalOpen}
                 onClose={() => setDisplayModalOpen(false)}
                 initialData={selectedNode?.data}
+            />
+
+            <FileContentModal
+                isOpen={isFileModalOpen}
+                onClose={() => setIsFileModalOpen(false)}
+                filePath={selectedFileNode?.path || null}
+                fileName={selectedFileNode?.name || null}
             />
         </div>
     );
