@@ -12,6 +12,7 @@ const config_1 = require("@nestjs/config");
 const sap_module_1 = require("./sap/sap.module");
 const script_module_1 = require("./script/script.module");
 const file_module_1 = require("./file/file.module");
+const gemini_module_1 = require("./gemini/gemini.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -22,6 +23,7 @@ exports.AppModule = AppModule = __decorate([
             sap_module_1.SapModule,
             script_module_1.ScriptModule,
             file_module_1.FileModule,
+            gemini_module_1.GeminiModule,
         ],
         controllers: [],
         providers: [],

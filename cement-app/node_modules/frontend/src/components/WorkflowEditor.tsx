@@ -32,6 +32,7 @@ import EnvConfigModal from './EnvConfigModal';
 import DisplayConfigModal from './DisplayConfigModal';
 import { scriptService } from '../services/script.service';
 import { fileService } from '../services/file.service';
+import { geminiService } from '../services/gemini.service';
 
 const nodeTypes = {
     equipment: EquipmentNode,
@@ -213,6 +214,103 @@ export default function WorkflowEditor() {
         }
     }, [setNodes]);
 
+    const handleRunAgent = useCallback(async (nodeId: string) => {
+        try {
+            let agentNode: any = null;
+            let envNode: any = null;
+            let currentEdges: any[] = [];
+
+            // Get current state
+            setNodes(nds => {
+                agentNode = nds.find(n => n.id === nodeId);
+                return nds;
+            });
+
+            setEdges(eds => {
+                currentEdges = eds;
+                return eds;
+            });
+
+            if (!agentNode) {
+                console.error('Agent node not found');
+                return;
+            }
+
+            const incomingEdges = currentEdges.filter(edge => edge.target === nodeId);
+
+            setNodes(nds => {
+                const envNodeId = incomingEdges.find(edge => {
+                    const sourceNode = nds.find(n => n.id === edge.source);
+                    return sourceNode?.type === 'env';
+                })?.source;
+
+                if (envNodeId) {
+                    envNode = nds.find(n => n.id === envNodeId);
+                }
+                return nds;
+            });
+
+            if (!envNode) {
+                throw new Error('No ENV node connected. Please connect an ENV node with API keys.');
+            }
+
+            const geminiKey = envNode.data.geminiKey;
+            if (!geminiKey) {
+                throw new Error('Gemini API key not found in ENV node. Please configure the ENV node with a Gemini API key.');
+            }
+
+            const { model, task } = agentNode.data;
+            if (!task) {
+                throw new Error('Agent task/prompt is empty. Please configure the agent with a task.');
+            }
+
+            const result = await geminiService.generateContent(geminiKey, model, task);
+
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to generate content');
+            }
+
+            const outgoingEdges = currentEdges.filter(edge => edge.source === nodeId);
+            const targetNodeIds = outgoingEdges.map(edge => edge.target);
+
+            setNodes(nds => nds.map(node => {
+                if (targetNodeIds.includes(node.id) && node.type === 'display') {
+                    return {
+                        ...node,
+                        data: {
+                            ...node.data,
+                            output: result.text
+                        }
+                    };
+                }
+                return node;
+            }));
+
+        } catch (error: any) {
+            console.error('Failed to run agent:', error);
+
+            setEdges(eds => {
+                const outgoingEdges = eds.filter(edge => edge.source === nodeId);
+                const targetNodeIds = outgoingEdges.map(edge => edge.target);
+
+                setNodes(nds => nds.map(node => {
+                    if (targetNodeIds.includes(node.id) && node.type === 'display') {
+                        return {
+                            ...node,
+                            data: {
+                                ...node.data,
+                                output: `Error: ${error.message}`
+                            }
+                        };
+                    }
+                    return node;
+                }));
+
+                return eds;
+            });
+        }
+    }, [setNodes, setEdges]);
+
     const handleNodeDelete = useCallback((nodeId: string) => {
         setNodes((nds) => nds.filter((node) => node.id !== nodeId));
         setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
@@ -276,12 +374,13 @@ export default function WorkflowEditor() {
                 return {
                     ...baseData,
                     label: 'New Agent',
-                    model: 'gpt-4-turbo',
+                    model: 'gemini-2.5-flash',
                     task: '',
                     persona: 'Maintenance Expert',
                     temperature: 0.7,
                     maxTokens: 2000,
-                    topP: 1.0
+                    topP: 1.0,
+                    onRun: handleRunAgent
                 };
             case 'sensor':
                 return { ...baseData, label: 'New Sensor', sensorId: '', type: 'Temperature' };
@@ -296,7 +395,7 @@ export default function WorkflowEditor() {
                     onRun: handleRunScript,
                 };
             case 'env':
-                return { ...baseData, label: '.env', openaiKey: '', anthropicKey: '', customKeys: [] };
+                return { ...baseData, label: '.env', openaiKey: '', anthropicKey: '', geminiKey: '', customKeys: [] };
             case 'display':
                 return {
                     ...baseData,

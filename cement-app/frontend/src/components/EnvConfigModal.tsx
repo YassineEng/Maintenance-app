@@ -17,10 +17,12 @@ interface CustomKey {
 export default function EnvConfigModal({ isOpen, onClose, onSave, initialData }: EnvConfigModalProps) {
     const [openaiKey, setOpenaiKey] = useState(initialData?.openaiKey || '');
     const [anthropicKey, setAnthropicKey] = useState(initialData?.anthropicKey || '');
+    const [geminiKey, setGeminiKey] = useState(initialData?.geminiKey || '');
     const [customKeys, setCustomKeys] = useState<CustomKey[]>(initialData?.customKeys || []);
 
     const [showOpenai, setShowOpenai] = useState(false);
     const [showAnthropic, setShowAnthropic] = useState(false);
+    const [showGemini, setShowGemini] = useState(false);
     const [showCustom, setShowCustom] = useState<{ [key: string]: boolean }>({});
 
     if (!isOpen) return null;
@@ -29,6 +31,7 @@ export default function EnvConfigModal({ isOpen, onClose, onSave, initialData }:
         onSave({
             openaiKey,
             anthropicKey,
+            geminiKey,
             customKeys,
         });
         onClose();
@@ -119,6 +122,29 @@ export default function EnvConfigModal({ isOpen, onClose, onSave, initialData }:
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                             >
                                 {showAnthropic ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Gemini API Key */}
+                    <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Google Gemini API Key
+                        </label>
+                        <div className="relative">
+                            <input
+                                type={showGemini ? 'text' : 'password'}
+                                value={geminiKey}
+                                onChange={(e) => setGeminiKey(e.target.value)}
+                                placeholder="AIza..."
+                                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowGemini(!showGemini)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                                {showGemini ? <EyeOff size={18} /> : <Eye size={18} />}
                             </button>
                         </div>
                     </div>

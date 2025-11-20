@@ -7,6 +7,7 @@ import { Workflow } from './entities/workflow.entity';
 import { SapModule } from './sap/sap.module';
 import { ScriptModule } from './script/script.module';
 import { FileModule } from './file/file.module';
+import { GeminiModule } from './gemini/gemini.module';
 
 @Module({
     imports: [
@@ -24,6 +25,7 @@ import { FileModule } from './file/file.module';
         SapModule,
         ScriptModule,
         FileModule,
+        GeminiModule,
     ],
     controllers: [],
     providers: [],

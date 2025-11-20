@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { Key, Plus } from 'lucide-react';
+import { Key } from 'lucide-react';
 import { NodeActionsToolbar } from './NodeActionsToolbar';
 
 const EnvNode = ({ data, id }: { data: any, id: string }) => {
@@ -31,12 +31,14 @@ const EnvNode = ({ data, id }: { data: any, id: string }) => {
             <Handle
                 type="target"
                 position={Position.Left}
+                id="env-input"
                 className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white"
             />
             <Handle
                 type="source"
                 position={Position.Right}
-                className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white"
+                id="env-output"
+                className="!w-3 !h-3 !bg-green-500 !border-2 !border-white"
             />
 
             {/* Node Content */}
@@ -56,11 +58,6 @@ const EnvNode = ({ data, id }: { data: any, id: string }) => {
                     API Configuration
                 </div>
             </div>
-
-            {/* Add Connection Button */}
-            <button className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 shadow-sm">
-                <Plus size={14} className="text-gray-600" />
-            </button>
         </div>
     );
 };

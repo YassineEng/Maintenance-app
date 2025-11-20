@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { Bot, Plus } from 'lucide-react';
+import { Bot, Play } from 'lucide-react';
 import { NodeActionsToolbar } from './NodeActionsToolbar';
 
 const AgentNode = ({ data, id }: { data: any, id: string }) => {
@@ -16,6 +16,11 @@ const AgentNode = ({ data, id }: { data: any, id: string }) => {
         if (data.onDuplicate) data.onDuplicate(id, data);
     };
 
+    const handleRun = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (data.onRun) data.onRun(id);
+    };
+
     return (
         <div
             className="relative bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow min-w-[180px]"
@@ -26,17 +31,27 @@ const AgentNode = ({ data, id }: { data: any, id: string }) => {
                 isVisible={isHovered}
                 onDelete={handleDelete}
                 onDuplicate={handleDuplicate}
-            />
+            >
+                <button
+                    onClick={handleRun}
+                    className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                    title="Run Agent"
+                >
+                    <Play size={14} />
+                </button>
+            </NodeActionsToolbar>
             {/* Connection Handles */}
             <Handle
                 type="target"
                 position={Position.Left}
+                id="agent-input"
                 className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white"
             />
             <Handle
                 type="source"
                 position={Position.Right}
-                className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white"
+                id="agent-output"
+                className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white"
             />
 
             {/* Node Content */}
@@ -56,11 +71,6 @@ const AgentNode = ({ data, id }: { data: any, id: string }) => {
                     {data.persona || 'Agent'}
                 </div>
             </div>
-
-            {/* Add Connection Button */}
-            <button className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 shadow-sm">
-                <Plus size={14} className="text-gray-600" />
-            </button>
         </div>
     );
 };
