@@ -58,7 +58,7 @@ export class FileController {
             const sheet = workbook.Sheets[sheetName];
 
             // Limit to first 100 rows for preview performance
-            const json = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 0 });
+            const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             const preview = json.slice(0, 100);
 
             return { content: JSON.stringify(preview) };
