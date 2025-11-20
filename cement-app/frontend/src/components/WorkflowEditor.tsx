@@ -33,6 +33,79 @@ import DisplayConfigModal from './DisplayConfigModal';
 import { scriptService } from '../services/script.service';
 import { fileService } from '../services/file.service';
 import { geminiService } from '../services/gemini.service';
+import { initializeNodes } from '../core/initNodes';
+import GenericNodeModal from './GenericNodeModal';
+import { nodeRegistry } from '../core/NodeRegistry';
+import { NodeExecutor } from '../core/NodeExecutor';
+
+// Initialize nodes registry
+initializeNodes();
+
+const nodeTypes = {
+    equipment: EquipmentNode,
+    agent: AgentNode,
+    sensor: SensorNode,
+    alert: AlertNode,
+    script: ScriptNode,
+    env: EnvNode,
+    display: DisplayNode,
+    file: FileNode,
+};
+
+const initialNodes: any[] = [];
+const initialEdges: any[] = [];
+
+let nodeId = 1;
+
+export default function WorkflowEditor() {
+    const [nodes, setNodes, onNodesChange] = useNodesState<any>(initialNodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+    const [selectedNode, setSelectedNode] = useState<any>(null);
+    const [equipmentModalOpen, setEquipmentModalOpen] = useState(false);
+    const [agentModalOpen, setAgentModalOpen] = useState(false);
+    ```
+import React, { useState, useCallback, useRef } from 'react';
+import ReactFlow, {
+    addEdge,
+    Background,
+    Controls,
+    MiniMap,
+    useNodesState,
+    useEdgesState,
+    Connection,
+    Edge,
+    NodeMouseHandler,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+
+import EquipmentNode from './EquipmentNode';
+import AgentNode from './AgentNode';
+import SensorNode from './SensorNode';
+import AlertNode from './AlertNode';
+import ScriptNode from './ScriptNode';
+import EnvNode from './EnvNode';
+import DisplayNode from './DisplayNode';
+import FileNode from './FileNode';
+import NodePalette from './NodePalette';
+import WorkflowToolbar from './WorkflowToolbar';
+import EquipmentConfigModal from './EquipmentConfigModal';
+import AgentConfigModal from './AgentConfigModal';
+import SensorConfigModal from './SensorConfigModal';
+import AlertConfigModal from './AlertConfigModal';
+import ScriptConfigModal from './ScriptConfigModal';
+import FileContentModal from './FileContentModal';
+import EnvConfigModal from './EnvConfigModal';
+import DisplayConfigModal from './DisplayConfigModal';
+import { scriptService } from '../services/script.service';
+import { fileService } from '../services/file.service';
+import { geminiService } from '../services/gemini.service';
+import { initializeNodes } from '../core/initNodes';
+import GenericNodeModal from './GenericNodeModal';
+import { nodeRegistry } from '../core/NodeRegistry';
+import { NodeExecutor } from '../core/NodeExecutor';
+
+// Initialize nodes registry
+initializeNodes();
 
 const nodeTypes = {
     equipment: EquipmentNode,
@@ -63,6 +136,9 @@ export default function WorkflowEditor() {
     const [displayModalOpen, setDisplayModalOpen] = useState(false);
     const [isFileModalOpen, setIsFileModalOpen] = useState(false);
     const [selectedFileNode, setSelectedFileNode] = useState<{ path: string; name: string } | null>(null);
+    
+    // Generic Node Modal State (New Architecture)
+    const [genericModalOpen, setGenericModalOpen] = useState(false);
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
@@ -77,18 +153,27 @@ export default function WorkflowEditor() {
 
     const onNodeDoubleClick: NodeMouseHandler = useCallback((_event, node) => {
         setSelectedNode(node);
+
+        // Check if node is in registry (New Architecture)
+        if (nodeRegistry.hasNode(node.type)) {
+            setGenericModalOpen(true);
+            return;
+        }
+
+        // Legacy nodes
         switch (node.type) {
             case 'equipment':
                 setEquipmentModalOpen(true);
-                break;
-            case 'agent':
-                setAgentModalOpen(true);
                 break;
             case 'sensor':
                 setSensorModalOpen(true);
                 break;
             case 'alert':
                 setAlertModalOpen(true);
+                break;
+            // Legacy fallbacks (should be covered by registry check above)
+            case 'agent':
+                setAgentModalOpen(true);
                 break;
             case 'script':
                 setScriptModalOpen(true);
@@ -106,10 +191,23 @@ export default function WorkflowEditor() {
                         name: node.data.fileInfo.name
                     });
                     setIsFileModalOpen(true);
+                } else {
+                    // If no file info (new node), use generic modal
+                    setGenericModalOpen(true);
                 }
                 break;
         }
     }, []);
+
+    const handleGenericNodeSave = (nodeId: string, data: any) => {
+        setNodes((nds) =>
+            nds.map((node) =>
+                node.id === nodeId
+                    ? { ...node, data: { ...node.data, ...data } }
+                    : node
+            )
+        );
+    };
 
     const handleConfigSave = (config: any) => {
         setNodes((nds) =>
@@ -159,7 +257,7 @@ export default function WorkflowEditor() {
                     if (targetNodeIds.includes(node.id) && node.type === 'display') {
                         return {
                             ...node,
-                            data: { ...node.data, output: `Error: ${error.message}` },
+                            data: { ...node.data, output: `Error: ${ error.message } ` },
                         };
                     }
                     return node;
@@ -169,7 +267,7 @@ export default function WorkflowEditor() {
     };
 
     const handleUploadComplete = useCallback(async (nodeId: string, fileInfo: any) => {
-        console.log(`Upload complete for node ${nodeId}`, fileInfo);
+        console.log(`Upload complete for node ${ nodeId }`, fileInfo);
 
         // Update the node's data
         setNodes(nds => nds.map(node => {
@@ -299,7 +397,7 @@ export default function WorkflowEditor() {
                             ...node,
                             data: {
                                 ...node.data,
-                                output: `Error: ${error.message}`
+                                output: `Error: ${ error.message } `
                             }
                         };
                     }
@@ -308,6 +406,86 @@ export default function WorkflowEditor() {
 
                 return eds;
             });
+        }
+    }, [setNodes, setEdges]);
+
+    const handleRunNode = useCallback(async (nodeId: string) => {
+        let currentNode: any;
+        let currentNodes: any[] = [];
+        let currentEdges: any[] = [];
+        
+        // Get latest state
+        setNodes(nds => {
+            currentNodes = nds;
+            currentNode = nds.find(n => n.id === nodeId);
+            return nds;
+        });
+        setEdges(eds => {
+            currentEdges = eds;
+            return eds;
+        });
+        
+        if (!currentNode) return;
+
+        // Get input data from incoming edges
+        const inputEdges = currentEdges.filter((edge) => edge.target === nodeId);
+        
+        const inputData = inputEdges.map((edge) => {
+            const sourceNode = currentNodes.find((n) => n.id === edge.source);
+            // Support both new executionResult and legacy output
+            if (sourceNode?.data?.executionResult) {
+                return sourceNode.data.executionResult[0]; // Assume output index 0
+            }
+            // Legacy fallback
+            return [{ json: { ...sourceNode?.data, output: sourceNode?.data?.output } }];
+        });
+
+        // If no inputs, provide empty input item
+        if (inputData.length === 0) {
+            inputData.push([{ json: {} }]);
+        }
+
+        try {
+             // Execute
+            const result = await NodeExecutor.executeNode(currentNode.type, {
+                node: {
+                    ...currentNode,
+                    name: currentNode.data.label || currentNode.type,
+                    parameters: currentNode.data.parameters || currentNode.data, // Fallback
+                },
+                workflow: { nodes: currentNodes, connections: {} }, // Mock workflow
+                inputData,
+                credentials: {}, // Credentials handled by Env node in inputData
+            });
+
+            if (result.error) {
+                console.error(`Error executing node ${ nodeId }: `, result.error);
+                // Update node with error
+                setNodes((nds) => nds.map(n => n.id === nodeId ? { 
+                    ...n, 
+                    data: { ...n.data, error: result.error?.message } 
+                } : n));
+                return;
+            }
+
+            // Update node with result
+            setNodes((nds) => nds.map(n => n.id === nodeId ? { 
+                ...n, 
+                data: { 
+                    ...n.data, 
+                    executionResult: result.data,
+                    // Legacy compatibility for Display node
+                    output: result.data[0]?.[0]?.json?.output || (typeof result.data[0]?.[0]?.json === 'string' ? result.data[0]?.[0]?.json : JSON.stringify(result.data[0]?.[0]?.json, null, 2)),
+                    error: undefined // Clear error
+                } 
+            } : n));
+
+        } catch (e: any) {
+            console.error('Execution failed:', e);
+             setNodes((nds) => nds.map(n => n.id === nodeId ? { 
+                    ...n, 
+                    data: { ...n.data, error: e.message } 
+                } : n));
         }
     }, [setNodes, setEdges]);
 
@@ -328,7 +506,7 @@ export default function WorkflowEditor() {
     }, [setNodes, setEdges]);
 
     const handleNodeDuplicate = useCallback((nodeId: string, data: any) => {
-        const newNodeId = `${parseInt(nodeId) + 1000}`; // Simple ID generation
+        const newNodeId = `${ parseInt(nodeId) + 1000 } `; // Simple ID generation
 
         setNodes((nds) => {
             const originalNode = nds.find((n) => n.id === nodeId);
@@ -340,8 +518,8 @@ export default function WorkflowEditor() {
                 position: { x: originalNode.position.x + 50, y: originalNode.position.y + 50 },
                 data: {
                     ...data,
-                    label: `${data.label} (Copy)`,
-                    onRun: handleRunScript,
+                    label: `${ data.label } (Copy)`,
+                    onRun: handleRunScript, // This should be handleRunNode for new architecture
                     onDelete: handleNodeDelete,
                     onDuplicate: handleNodeDuplicate,
                     onClear: (nodeId: string) => {
@@ -366,32 +544,34 @@ export default function WorkflowEditor() {
         });
     }, [setNodes, handleUploadComplete, handleNodeDelete, handleRunScript]);
 
-    const getDefaultNodeData = (type: string, equipmentType?: string) => {
-        const baseData = {
+    const getDefaultNodeData = (type: string) => {
+        const baseData = { 
+            label: type.charAt(0).toUpperCase() + type.slice(1),
             onDelete: handleNodeDelete,
-            onDuplicate: handleNodeDuplicate
+            onDuplicate: handleNodeDuplicate,
+            onRun: handleRunNode // Attach new execution handler
         };
 
         switch (type) {
             case 'equipment':
                 return {
                     ...baseData,
-                    label: equipmentType || 'New Equipment',
-                    equipmentType: equipmentType || 'Rotary Kiln',
+                    label: 'New Equipment',
+                    equipmentType: 'Rotary Kiln',
                     equipmentId: '',
                     status: 'Running'
                 };
             case 'agent':
                 return {
                     ...baseData,
-                    label: 'New Agent',
+                    label: 'AI Agent',
                     model: 'gemini-2.5-flash',
                     task: '',
-                    persona: 'Maintenance Expert',
+                    persona: 'You are a helpful maintenance expert assistant.',
                     temperature: 0.7,
                     maxTokens: 2000,
                     topP: 1.0,
-                    onRun: handleRunAgent
+                    onRun: handleRunNode // Use new handler
                 };
             case 'sensor':
                 return { ...baseData, label: 'New Sensor', sensorId: '', type: 'Temperature' };
@@ -400,13 +580,21 @@ export default function WorkflowEditor() {
             case 'script':
                 return {
                     ...baseData,
-                    label: 'New Script',
-                    code: '',
-                    language: 'JavaScript',
-                    onRun: handleRunScript,
+                    label: 'Code',
+                    code: '// Write your code here\nreturn items;',
+                    language: 'javascript',
+                    onRun: handleRunNode // Use new handler
                 };
             case 'env':
-                return { ...baseData, label: '.env', openaiKey: '', anthropicKey: '', geminiKey: '', customKeys: [] };
+                return {
+                    ...baseData,
+                    label: '.env',
+                    openaiKey: '',
+                    anthropicKey: '',
+                    geminiKey: '',
+                    customKeys: [],
+                    onRun: handleRunNode
+                };
             case 'display':
                 return {
                     ...baseData,
@@ -420,14 +608,16 @@ export default function WorkflowEditor() {
                                     : node
                             )
                         );
-                    }
+                    },
+                    onRun: handleRunNode
                 };
             case 'file':
                 return {
                     ...baseData,
                     label: 'File Node',
                     fileInfo: null,
-                    onUploadComplete: handleUploadComplete
+                    onUploadComplete: handleUploadComplete,
+                    onRun: handleRunNode
                 };
             default:
                 return { ...baseData, label: 'New Node' };
@@ -456,7 +646,7 @@ export default function WorkflowEditor() {
                 id: String(nodeId++),
                 type,
                 position,
-                data: getDefaultNodeData(type, equipmentType),
+                data: getDefaultNodeData(type), // Removed equipmentType parameter
             };
 
             setNodes((nds) => nds.concat(newNode));
@@ -536,6 +726,17 @@ export default function WorkflowEditor() {
                 </div>
             </div>
 
+            {/* Generic Node Modal (New Architecture) */}
+            <GenericNodeModal
+                isOpen={genericModalOpen}
+                onClose={() => setGenericModalOpen(false)}
+                onSave={handleGenericNodeSave}
+                nodeId={selectedNode?.id || ''}
+                nodeType={selectedNode?.type || ''}
+                initialData={selectedNode?.data || {}}
+            />
+
+            {/* Legacy Modals */}
             <EquipmentConfigModal
                 isOpen={equipmentModalOpen}
                 onClose={() => setEquipmentModalOpen(false)}
@@ -583,15 +784,17 @@ export default function WorkflowEditor() {
             <DisplayConfigModal
                 isOpen={displayModalOpen}
                 onClose={() => setDisplayModalOpen(false)}
+                onSave={handleConfigSave}
                 initialData={selectedNode?.data}
             />
 
             <FileContentModal
                 isOpen={isFileModalOpen}
                 onClose={() => setIsFileModalOpen(false)}
-                filePath={selectedFileNode?.path || null}
-                fileName={selectedFileNode?.name || null}
+                filePath={selectedFileNode?.path || ''}
+                fileName={selectedFileNode?.name || ''}
             />
         </div>
     );
 }
+```
